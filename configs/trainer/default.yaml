@@ -1,0 +1,34 @@
+_target_: lightning.pytorch.trainer.Trainer
+
+default_root_dir: ${paths.output_dir}
+
+min_epochs: 1 # prevents early stopping
+max_epochs: 5000
+
+accelerator: auto
+devices: 1
+
+# limit_train_batches: 0.01 # useful for debugging
+
+# mixed precision for extra speed-up
+# precision: 16
+
+# perform a validation loop every N training epochs
+check_val_every_n_epoch: 5
+
+# log metrics every N steps
+log_every_n_steps: 100
+
+# disable sanity validation checks (don't run on untrained generative models)
+num_sanity_val_steps: 0
+
+# add gradient clipping to prevent exploding gradients
+gradient_clip_val: 10.0
+gradient_clip_algorithm: norm
+
+# accumulate gradients over N batches before stepping (effective batch = batch_size * N)
+accumulate_grad_batches: 1
+
+# set True to to ensure deterministic results
+# makes training slower but gives more reproducibility than just setting seeds
+deterministic: False

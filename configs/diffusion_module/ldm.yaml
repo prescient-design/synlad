@@ -1,0 +1,66 @@
+_target_: synlad.models.ldm_module.LatentDiffusionLitModule
+
+autoencoder_ckpt: ""  # path to VAE checkpoint
+vocab_json: ""  # path to vocabulary json
+rxn_server_url: null  # URL for RxnLM server — set at sampling time, not training
+
+ph4_encoder: ${ph4_encoder}
+
+bincount_path: ${data.bincount_path}
+train_smiles_path: ${data.train_smiles_path}
+
+denoiser:
+  _target_: synlad.models.denoisers.dit.DiT
+  d_x: 8
+  d_model: 768    # 384, 768, 1024
+  nhead: 12        # 6, 12, 16
+  num_layers: 12  # 12, 12, 24
+  use_conditioning: true
+  mlp_ratio: 4.0
+  dropout_prob: 0.2
+
+interpolant:
+  _target_: synlad.models.interpolants.flow_matching.FlowMatchingInterpolant
+  min_t: 1e-2
+  corrupt: True
+  num_timesteps: 100
+  self_condition: true
+  self_condition_prob: 0.5
+
+augmentations:
+  frac_coords: true
+  pos: true
+
+sampling:
+  cfg_scale: 2.0
+  num_samples: 1000
+  batch_size: 100
+  data_dir: ${paths.data_dir}
+  visualize: true
+  save_dir: ${paths.viz_dir}
+  removeHs: false  # only retain heavy atoms (for molecules)
+  synthesis_top_k: 5
+  synthesis: true
+  synthesis_inference_method: "sample" # "sample" or "beam_search"
+  do_rocs_metric: false
+  do_posebusters: true
+  use_cfg: false
+  compute_diversity: false
+  diversity_fingerprint_type: "ECFP4"
+conditioning:
+  false
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 0.0001
+  weight_decay: 0.0
+
+scheduler: null
+
+scheduler_frequency: ${trainer.check_val_every_n_epoch}
+
+# compile model for faster training with pytorch 2.0
+compile: false
+
+ph4_dropout_enabled: true

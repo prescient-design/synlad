@@ -1,0 +1,47 @@
+_target_: synlad.models.vae_module.VariationalAutoencoderLitModule
+
+encoder: ${encoder}
+
+decoders:
+  molecule_decoder: ${decoder}
+  synthesis_decoder: ${synthesis_decoder}
+
+latent_dim: 8
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 0.0001
+  weight_decay: 0.0
+
+scheduler: null
+
+scheduler_frequency: ${trainer.check_val_every_n_epoch}
+
+loss_weights:
+  loss_atom_types: 1.0
+  loss_pos: 1.0
+  sigma_sq: 0.1
+  loss_kl: 0.00001
+  loss_synthesis: 1.0
+  lambda_weight: null
+
+augmentations:
+  noise: 0.1  # proportion of atoms to perturb
+  pos: true
+
+visualization:
+  visualize: true
+  save_dir: ${paths.viz_dir}/
+  log_frequency: 15
+  max_synthesis_examples: 3
+
+# compile model for faster training with pytorch 2.0
+compile: false
+
+# for synthesis evaluation
+full_synthesis_accuracies: false
+provide_synthesis_examples: true
+
+# Whether to not backpropagate synthesis loss to encoder
+detach_synthesis_from_encoder: false

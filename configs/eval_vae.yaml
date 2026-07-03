@@ -1,0 +1,57 @@
+# @package _global_
+
+# specify here default configuration
+# order of defaults determines the order in which configs override each other
+defaults:
+  - data: uspto
+  - encoder: transformer
+  - decoder: transformer
+  - synthesis_decoder: large
+  - autoencoder_module: vae
+  - logger: null
+  - trainer: default
+  - paths: default
+  - extras: default
+  - hydra: default
+  - _self_
+
+# run name, eg. for wandb logging
+name: "vae_experiment"
+
+# task name, determines output directory path
+task_name: "eval_autoencoder"
+
+# tags to help you identify your experiments
+# you can overwrite this in experiment configs
+# overwrite from command line with `python train.py tags="[first_tag, second_tag]"`
+tags: ["joint", "autoencoder", "eval"]
+
+# Provide a checkpoint to evaluate. Override on the CLI as ckpt_path=...
+ckpt_path: ???
+
+# Results save directory for comprehensive metrics and molecule outputs.
+results_save_dir: ${paths.output_dir}/autoencoder_eval
+
+# Evaluation configuration
+evaluation:
+  max_molecules: 1000  # Maximum number of molecules to evaluate (null = evaluate all)
+
+# seed for random number generators in pytorch, numpy and python.random
+seed: 9
+
+autoencoder_module:
+  visualization:
+    visualize: true
+    log_frequency: 15
+    max_synthesis_examples: 5
+
+synthesis_inference_method: "beam_search"
+synthesis_top_k: 10
+beam_width: 5
+synthesis_warper: "top_k"
+
+vocab_json: ${paths.data_dir}/synthesis_vocab_uspto.json
+rxn_server_url: ???
+
+data:
+  batch_size: 64

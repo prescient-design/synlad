@@ -1,0 +1,184 @@
+[build-system]
+requires = ["setuptools>=65", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synlad"
+description = "Latent diffusion for synthesizable molecule generation."
+authors = [{ name = "Prescient Design, Genentech Inc." }]
+license = { text = "MIT" }
+requires-python = "==3.12.*"
+readme = "README.md"
+dynamic = ["version"]
+
+dependencies = [
+    # Core scientific stack
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "scipy>=1.11",
+    "scikit-learn>=1.3",
+    "joblib>=1.3",
+
+    # Deep learning
+    "torch==2.8.0+cu129",
+    "torchvision==0.23.0+cu129",
+    "torchaudio==2.8.0+cu129",
+    "lightning>=2.5",
+    "pytorch-lightning>=2.5",
+    "torchmetrics>=0.11",
+    "triton>=3.0; sys_platform == 'linux'",
+
+    # PyTorch Geometric stack
+    # torch_sparse and pyg_lib are intentionally omitted: their pt27cu126
+    # wheels have ABI-breaking changes in torch 2.8 and fail to load. The
+    # synlad codebase only imports torch_scatter directly; if you hit a
+    # torch_geometric path that needs them, downgrade torch to 2.7+cu126.
+    "torch_geometric>=2.5",
+    "torch_scatter==2.1.2+pt27cu126",
+    "torch_cluster==1.6.3+pt27cu126",
+    "torch_spline_conv==1.2.2+pt27cu126",
+
+    # Cheminformatics
+    "rdkit>=2024.3",
+    "openbabel-wheel>=3.1.1",
+    "posebusters>=0.4.4",
+    "pymatgen>=2024.0",
+
+    # Configuration & orchestration
+    "hydra-core>=1.3",
+    "hydra-colorlog>=1.2",
+    "omegaconf>=2.3",
+    "rootutils>=1.0.7",
+
+    # Utilities
+    "cachetools>=5.0",
+    "pydantic>=2.0",
+    "requests>=2.0",
+    "tqdm>=4.0",
+    "pyyaml>=6.0",
+    "rich>=13",
+    "loguru>=0.7",
+    "wandb>=0.18",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pre-commit>=3.0",
+    "ruff>=0.5",
+]
+
+# Retrosynthesis stack for scripts/evaluate_samples.py. aizynthfinder pins
+# rdkit<2024.0.0 and reaction-utils pulls in swifter (which is broken on
+# dask 2026.x). Both are worked around via `override-dependencies` in the
+# [tool.uv] section. Enable with `uv sync --extra retro`.
+retro = [
+    "aizynthfinder>=4.4,<5",
+    "reaction-utils>=1.9.3,<2",
+]
+
+# OpenEye toolkits are not on public PyPI and require a commercial license.
+# Installed from OpenEye's anaconda.org index — see [tool.uv.sources] below.
+openeye = ["OpenEye-toolkits"]
+
+[project.urls]
+Homepage = "https://github.com/prescient-design/synlad"
+Repository = "https://github.com/prescient-design/synlad"
+Issues = "https://github.com/prescient-design/synlad/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"synlad.configs" = ["**/*.yaml"]
+
+[tool.setuptools_scm]
+search_parent_directories = true
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"
+fallback_version = "0.0.1"
+
+# ---------------------------------------------------------------------------
+# uv configuration
+# ---------------------------------------------------------------------------
+# torch / torchvision / torchaudio come from PyTorch's CUDA 12.9 wheel index.
+# The pyg extension wheels (built against torch 2.7 + cu126) come from PyG's
+# flat wheel index. These coexist at runtime in the original conda env.
+
+[tool.uv]
+# Lock for Linux x86_64 only — the CUDA 12.9 torch wheels and the pyg
+# extension wheels are not published for macOS or Windows.
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+# Overrides for the [retro] extra:
+#   * rdkit: aizynthfinder pins <2024, but we stay on the project's >=2024.3.
+#   * dask:  swifter (pulled in by reaction-utils) breaks on dask 2026.x,
+#           which no longer exposes dask.config at the top level.
+override-dependencies = [
+    "rdkit>=2024.3",
+    "dask>=2024.4,<2025",
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu129" }]
+torchvision = [{ index = "pytorch-cu129" }]
+torchaudio = [{ index = "pytorch-cu129" }]
+torch_scatter = [{ index = "pyg" }]
+torch_cluster = [{ index = "pyg" }]
+torch_spline_conv = [{ index = "pyg" }]
+OpenEye-toolkits = [{ index = "openeye" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
+
+[[tool.uv.index]]
+name = "pyg"
+url = "https://data.pyg.org/whl/torch-2.7.0+cu126.html"
+explicit = true
+format = "flat"
+
+[[tool.uv.index]]
+name = "openeye"
+url = "https://pypi.anaconda.org/OpenEye/simple"
+explicit = true
+
+# ---------------------------------------------------------------------------
+# ruff (lint + format)
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Conservative starter set: pyflakes (unused imports / undefined names),
+# pycodestyle errors, isort, pyupgrade, simple bugbear checks. Line-length
+# (E501) is intentionally ignored for now — large parts of the codebase are
+# above 100 chars and reflowing them all is out of scope for the OSS-prep
+# pass. Tighten the ruleset later once the existing code is reflowed.
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # line too long — see note above
+    "E741",  # ambiguous variable names (e.g. `l`) — common in math code
+    "B008",  # function calls in argument defaults — common with hydra/pydantic
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["synlad"]
+
+[tool.ruff.format]
+# Match the existing repo style: double quotes, 4-space indent.
+quote-style = "double"
+indent-style = "space"
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "requires_pathway_data: test needs real pathway pickles (gated on TEST_PATHWAY_DATA)",
+]

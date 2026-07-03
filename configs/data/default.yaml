@@ -1,0 +1,40 @@
+# @package _global_
+
+# Configuration for PathwayDataModule
+# This datamodule loads synthesis pathways and 3D molecular conformations from pickle files
+
+defaults:
+  - _self_
+
+data:
+  _target_: synlad.data.pathway_datamodule.PathwayDataModule
+
+  train_pathway_file: ???  # Path to pickle file with pathways and molecules
+  val_pathway_file: ???  # Path to pickle file with pathways and molecules
+  test_pathway_file: ???  # Path to pickle file with pathways and molecules
+
+  # Molecule processing parameters
+  max_atoms: 30                    # Maximum number of heavy atoms per molecule (larger molecules filtered out)
+  use_all_conformers: false        # Sample a random conformer every time (vs only first conformer)
+  coords_normalizer: 1.0           # Coordinate normalization factor (larger = more normalization)
+  removeHs: true                   # Whether to remove hydrogens from the molecules
+
+  # DataLoader parameters
+  batch_size: 256                   # Batch size for training
+  num_workers: 8                   # Number of parallel data loading workers
+  pin_memory: false                 # Whether to pin memory for GPU transfer
+
+  # Reproducibility
+  seed: 42                         # Random seed for data splitting
+
+  # Collate function parameters
+  nested_tensors: false            # Whether to use nested tensors (disabled for training compatibility)
+  max_seq_len: 512                 # Maximum sequence length for pathways
+  enable_conditioning: true        # Whether to enable conditioning
+  prefix_free_generation: true     # Whether to use prefix-free generation
+  earliest_bbs_first: true        # Whether to use earliest building blocks first
+  token_weightings:
+    "<REV_RXN>": 0.0
+
+  # Pharmacophore parameters
+  do_pharmacophores: false         # Whether to use pharmacophores

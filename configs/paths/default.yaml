@@ -1,0 +1,28 @@
+# @package _global_
+#
+# Default paths. Each location is read from an environment variable with a
+# fall-back relative to the project root, so the repository works both in
+# development (no env vars set) and in cluster jobs (env vars set in the
+# submission script).
+
+paths:
+  # Root of the cloned repository.
+  root_dir: ${oc.env:PROJECT_ROOT,${hydra:runtime.cwd}}
+
+  # Where datasets live. Override with the DATA_DIR environment variable, or
+  # by passing paths.data_dir=... on the command line.
+  data_dir: ${oc.env:DATA_DIR,${paths.root_dir}/data}
+
+  # Where Hydra writes run outputs (logs, hydra config snapshots, etc).
+  output_dir: ${oc.env:OUTPUT_DIR,${paths.root_dir}/outputs}
+  log_dir: ${paths.output_dir}/logs
+
+  # Where model checkpoints are written. Each run gets its own timestamped
+  # sub-directory so concurrent jobs do not overwrite each other.
+  checkpoints_dir: ${oc.env:CHECKPOINTS_DIR,${paths.output_dir}/checkpoints}/${name}_${now:%Y-%m-%d_%H-%M-%S}
+
+  # Where evaluation visualisations are written.
+  viz_dir: ${oc.env:VIZ_DIR,${paths.output_dir}/visualizations}
+
+  # Hydra working directory.
+  work_dir: ${hydra:runtime.cwd}

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+# (uv.lock is committed; .python-version is committed)
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Project outputs
+outputs/
+logs/
+wandb/
+*.ckpt
+
+# OS
+.DS_Store

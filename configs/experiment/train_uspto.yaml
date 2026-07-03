@@ -1,0 +1,76 @@
+# @package _global_
+
+defaults:
+  - override /data: uspto
+  - override /synthesis_decoder: large
+
+# experiment name for logging and output directories
+name: "vae_train_USPTO"
+
+# tags to help you identify your experiments
+# you can overwrite this in experiment configs
+# overwrite from command line with `python train.py tags="[first_tag, second_tag]"`
+tags: ["3d_autoencoder", "train", "full", "combined", "all_conformers", "lambda_0.92", "USPTO"]
+
+# set False to skip model training
+train: True
+
+# evaluate on test set, using best model weights achieved during training
+# lightning chooses best weights based on the metric specified in checkpoint callback
+test: True
+
+# simply provide checkpoint path to resume training
+ckpt_path: null
+
+# seed for random number generators in pytorch, numpy and python.random
+seed: 42
+
+data:
+  use_all_conformers: true
+  do_pharmacophores: false
+
+synthesis_decoder:
+  params:
+    conditioning_dim: 16
+
+encoder:
+  d_model: 256 # 512
+  nhead: 4 # 8
+  dim_feedforward: 1024 # 2048
+  activation: "gelu"
+  dropout: 0.0
+  norm_first: true
+  bias: true
+  num_layers: 6 # 8
+  max_num_elements: 9
+
+decoder:
+  d_model: 256 # 512
+  nhead: 4 # 8
+  dim_feedforward: 1024 # 2048
+  activation: "gelu"
+  dropout: 0.0
+  norm_first: true
+  bias: true
+  num_layers: 6 # 8
+  max_num_elements: 9
+
+autoencoder_module:
+  loss_weights:
+    loss_kl: 0.00001
+    loss_synthesis: 1.0
+    loss_atom_types: 1.0
+    loss_pos: 1.0
+    sigma_sq: 1.0
+    lambda_weight: 0.92
+  visualization:
+    visualize: true
+    log_frequency: 15
+    max_synthesis_examples: 5
+  full_synthesis_accuracies: true
+  detach_synthesis_from_encoder: false
+  latent_dim: 16
+  use_molecule_decoder: true
+
+trainer:
+  check_val_every_n_epoch: 25

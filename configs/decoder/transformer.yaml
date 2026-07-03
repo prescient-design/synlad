@@ -1,0 +1,11 @@
+_target_: synlad.models.decoders.transformer.TransformerDecoder
+
+max_num_elements: ${encoder.max_num_elements}
+d_model: 512
+nhead: 8
+dim_feedforward: 2048
+activation: "gelu"
+dropout: 0.0
+norm_first: true
+bias: true
+num_layers: 8

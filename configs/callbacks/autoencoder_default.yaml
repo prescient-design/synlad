@@ -1,0 +1,17 @@
+defaults:
+  - model_checkpoint
+  # - early_stopping
+  # - learning_rate_monitor
+  - _self_
+
+model_checkpoint:
+  dirpath: ${paths.checkpoints_dir}
+  filename: "vae-epoch@{epoch}-step@{step}-val_match_rate@{val/match_rate:.4f}"
+  monitor: "val/match_rate"
+  mode: "max"
+  save_last: True
+
+# early_stopping:
+#   monitor: "val/match_rate"
+#   patience: 100
+#   mode: "max"

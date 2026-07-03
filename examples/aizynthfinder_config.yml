@@ -1,0 +1,19 @@
+# Example AiZynthFinder configuration used by scripts/evaluate_samples.py
+# (passed via --aizynth_config). Replace the placeholder paths below with the
+# locations of your downloaded models, templates, and stock files.
+#
+# For the full schema and additional options (search policies, scorers, etc.)
+# see https://molecularai.github.io/aizynthfinder/configuration.html
+
+expansion:
+  uspto:
+    - /path/to/aizynthfinder/uspto_model.onnx
+    - /path/to/aizynthfinder/uspto_templates.csv.gz
+  ringbreaker:
+    - /path/to/aizynthfinder/uspto_ringbreaker_model.onnx
+    - /path/to/aizynthfinder/uspto_ringbreaker_templates.csv.gz
+filter:
+  uspto: /path/to/aizynthfinder/uspto_filter_model.onnx
+stock:
+  zinc: /path/to/aizynthfinder/zinc_stock.hdf5
+  wuxi: /path/to/aizynthfinder/wuxi_stock.hdf5

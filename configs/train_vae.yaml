@@ -1,0 +1,79 @@
+# @package _global_
+
+# Training configuration for the molecule + synthesis VAE
+# This config uses both synthesis pathways and 3D molecular data
+
+defaults:
+  - _self_
+  - data: default
+  - encoder: transformer
+  - decoder: transformer
+  - synthesis_decoder: large
+  - autoencoder_module: vae
+  - callbacks: autoencoder_default
+  - logger: wandb
+  - trainer: default
+  - paths: default
+  - extras: default
+  - hydra: default
+
+  # experiment configs allow for version control of specific hyperparameters
+  - experiment: null
+
+  # config for hyperparameter optimization
+  - hparams_search: null
+
+  # optional local config for machine/user specific settings
+  - optional local: default
+
+  # debugging config
+  - debug: null
+
+# task name, determines output directory path
+task_name: "train_vae"
+
+# experiment name for logging and output directories
+name: "vae_experiment"
+
+# tags to help you identify your experiments
+tags: ["vae", "synthesis_pathways", "3d_molecules", "train"]
+
+# set False to skip model training
+train: True
+
+# evaluate on test set, using best model weights achieved during training
+test: True
+
+# simply provide checkpoint path to resume training
+ckpt_path: null
+
+# seed for random number generators in pytorch, numpy and python.random
+seed: 42
+
+# encoder configuration for molecule decoder
+encoder:
+  d_model: 256
+  nhead: 6
+  dim_feedforward: 1024
+  activation: "gelu"
+  dropout: 0.0
+  norm_first: true
+  bias: true
+  num_layers: 6
+  max_num_elements: 9
+
+# decoder configuration for molecule decoder
+decoder:
+  d_model: 256
+  nhead: 6
+  dim_feedforward: 1024
+  activation: "gelu"
+  dropout: 0.0
+  norm_first: true
+  bias: true
+  num_layers: 6
+  max_num_elements: 9
+
+autoencoder_module:
+  loss_weights:
+    loss_kl: 0.0001

@@ -1,0 +1,107 @@
+# @package _global_
+#
+# Pharmacophore-conditional sampling / evaluation for the latent diffusion
+# model. Set DIR_NAME to the checkpoint directory you want to evaluate.
+
+DIR_NAME: ???
+
+defaults:
+  - data: uspto
+  - ph4_encoder: transformer
+  - synthesis_decoder: large
+  - diffusion_module: ldm
+  - callbacks: diffusion_default
+  - logger: null
+  - trainer: default
+  - paths: default
+  - extras: default
+  - hydra: default
+  - _self_
+
+# Run name for logging
+name: "diffusion_sampling_evaluation_ph4_cond"
+
+# Task name determines output directory path
+task_name: "sample_eval_diffusion"
+
+# Tags for experiment identification
+tags: ["sampling", "evaluation", "ph4_cond"]
+
+# Provide checkpoint path to evaluate (REQUIRED)
+ckpt_path: "${DIR_NAME}/last.ckpt"
+
+interpolant:
+  num_timesteps: 100
+
+# Sampling configuration - these override model defaults
+sampling:
+  num_samples: 1000
+  batch_size: 100
+  cfg_scale: 2.0           # CFG scale when use_cfg=true
+  visualize: true
+  save_dir: "${DIR_NAME}/eval_outputs/"
+  synthesis: true
+  synthesis_inference_method: "beam_search"
+  beam_width: 5
+  synthesis_warper: "top_k"
+  synthesis_top_k: 5
+  use_cfg: false           # Set true to enable classifier-free guidance
+  do_rocs_metric: true     # ROCS overlap vs reference ligand
+  do_rocs_for_syn: false
+  compute_diversity: false
+  diversity_fingerprint_type: "ECFP4"
+
+vocab_json: ${paths.data_dir}/synthesis_vocab_uspto.json
+rxn_server_url: ???
+
+diffusion_module:
+  denoiser:
+    use_conditioning: true
+
+# Results save directory for comprehensive metrics and config
+results_save_dir: "${DIR_NAME}/eval_outputs/"
+
+# Trainer configuration optimized for evaluation
+trainer:
+  _target_: lightning.Trainer
+  accelerator: auto
+  devices: 1
+  precision: 32
+  enable_checkpointing: false
+  enable_progress_bar: true
+  enable_model_summary: false
+  logger: true
+
+# Seed for reproducibility
+seed: 42
+
+# Data configuration for evaluation
+data:
+  pin_memory: false
+  do_pharmacophores: true
+  max_atoms: 40
+
+# Hydra job configuration
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: ${paths.output_dir}/${task_name}/${now:%Y-%m-%d_%H-%M-%S}
+
+sample_from_test_set: true
+do_pharmacophores: true
+n_samples_per_pharmacophore: 100
+n_pharmacophores: 50
+fix_num_atoms: false
+do_posebusters: false
+ph4_dropout_enabled: true
+
+# Path to a pickle file with molecules + precomputed pharmacophores (used when
+# sample_from_test_set is false).
+ligands_path: ${paths.data_dir}/litpcba_ligands_with_ph4.pkl
+batch_size: 8  # Batch size for custom loader
+
+# Diversity computation settings for per-conditioning analysis
+diversity:
+  enabled: true
+  fingerprint_type: "ECFP4"

@@ -1,0 +1,30 @@
+defaults:
+  - _self_
+
+_target_: synlad.models.synthesis_decoder.SynthesisDecoderModel
+
+# SynthesisDecoderParams configuration
+params:
+  _target_: synlad.models.synthesis_decoder.SynthesisDecoderParams
+
+  # Required parameter - you'll need to set this based on your token vocabulary
+  max_special_token_size: 11  # Adjust based on your vocab size
+
+  # Model architecture parameters
+  dim: 256
+  max_seq_size: 1024
+  num_transformer_blocks: 4
+  n_heads: 4
+  dropout: 0.1
+  dtype: "float32"
+
+  # Slim fingerprint MLP for low-data regimes (USPTO ~67k pathways).
+  fingerprint_dim: 2048
+  fingerprint_dims: [512, 256]
+  fingerprint_hidden_dims: [768, 384]
+
+  # Use nested tensors for better performance
+  nested: false
+
+  # Conditioning dimension - adjusted to match VAE latent_dim (8)
+  conditioning_dim: 16

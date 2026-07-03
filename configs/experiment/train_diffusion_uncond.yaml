@@ -1,0 +1,38 @@
+# @package _global_
+
+defaults:
+  - override /synthesis_decoder: large
+  - override /data: uspto
+  - override /ph4_encoder: transformer
+
+name: "ldm_USPTO_unconditional"
+
+tags: ["LDM", "train", "full", "combined"]
+
+diffusion_module:
+  # Provide on the CLI: diffusion_module.autoencoder_ckpt=/path/to/vae.ckpt
+  autoencoder_ckpt: ???
+  vocab_json: ${paths.data_dir}/synthesis_vocab_uspto.json
+  denoiser:
+    use_conditioning: false
+    d_x: 16
+  sampling:
+    synthesis_top_k: 1
+    beam_width: 1
+    synthesis: false # setting to false because it is slow and does not work with multigpu
+    synthesis_inference_method: "sample" # "sample" or "beam_search"
+    do_posebusters: true
+
+autoencoder_module:
+  latent_dim: 16
+
+synthesis_decoder:
+  params:
+    conditioning_dim: 16
+
+trainer:
+  check_val_every_n_epoch: 35
+
+data:
+  do_pharmacophores: false
+  use_all_conformers: true

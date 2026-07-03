@@ -1,0 +1,1187 @@
+
+Applies on top of john-bradshaw/rxn-lm@76ffe65 (main).
+
+Includes:
+- Bidirectional (mixed forward/backward) reaction prediction:
+  new <fwd>/<rev> prefix tokens in the tokenizer, mixed-direction
+  training and evaluation support, updated vocab file.
+- Second vocab file for single-direction runs (vocab_uspto_mixed_augm_one_dir.json).
+- Training augmentation (SMILES randomization) support.
+- Order-agnostic evaluation.
+- Serving code (scripts/serving/serve.py, rxn_lm/server_utils/) exposing
+  a FastAPI predict endpoint.
+- Updated data-prep vocab script for the new prefix tokens.
+- New training configs under scripts/training/configs/uspto_augm/.
+---
+ .../vocab_uspto_mixed_augm.json               |   2 +-
+ .../vocab_uspto_mixed_augm_one_dir.json       |   1 +
+ rxn_lm/eval_utils/eval_core.py                |  37 +++-
+ rxn_lm/eval_utils/eval_submethods.py          |  60 +++++--
+ rxn_lm/server_utils/__init__.py               |   0
+ rxn_lm/server_utils/api_types.py              |  36 ++++
+ rxn_lm/server_utils/pipeline.py               | 170 ++++++++++++++++++
+ rxn_lm/tokenizer.py                           |  20 ++-
+ rxn_lm/train_utils/train_submethods.py        | 116 ++++++++++--
+ rxn_lm/train_utils/training_core.py           | 154 +++++++++++++---
+ scripts/data_prep/02_create_vocab.py          |   7 +-
+ scripts/serving/serve.py                      |  97 ++++++++++
+ ...uspto_stereo_mixed_backward_direction.json |  41 +++++
+ .../uspto_stereo_mixed_mixed_direction.json   |  41 +++++
+ ...pto_stereo_mixed_mixed_direction_augm.json |  46 +++++
+ 15 files changed, 773 insertions(+), 55 deletions(-)
+ create mode 100644 data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm_one_dir.json
+ create mode 100644 rxn_lm/server_utils/__init__.py
+ create mode 100644 rxn_lm/server_utils/api_types.py
+ create mode 100644 rxn_lm/server_utils/pipeline.py
+ create mode 100644 scripts/serving/serve.py
+ create mode 100644 scripts/training/configs/uspto_augm/uspto_stereo_mixed_backward_direction.json
+ create mode 100644 scripts/training/configs/uspto_augm/uspto_stereo_mixed_mixed_direction.json
+ create mode 100644 scripts/training/configs/uspto_augm/uspto_stereo_mixed_mixed_direction_augm.json
+
+diff --git a/data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm.json b/data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm.json
+index 491a419..c234d08 100644
+--- a/data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm.json
++++ b/data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm.json
+@@ -1 +1 @@
+-{"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "#": 4, "(": 5, ")": 6, "-": 7, ".": 8, "1": 9, "2": 10, "3": 11, "4": 12, "5": 13, "6": 14, "7": 15, "8": 16, "9": 17, "=": 18, "B": 19, "Br": 20, "C": 21, "Cl": 22, "F": 23, "I": 24, "N": 25, "O": 26, "P": 27, "S": 28, "[Ag+2]": 29, "[Ag+]": 30, "[Ag-]": 31, "[Ag]": 32, "[Al+2]": 33, "[Al+3]": 34, "[Al+]": 35, "[AlH2-]": 36, "[AlH3]": 37, "[AlH4-]": 38, "[AlH]": 39, "[Al]": 40, "[Ar]": 41, "[As+]": 42, "[As]": 43, "[Au-]": 44, "[Au]": 45, "[B+2]": 46, "[B+3]": 47, "[B+]": 48, "[B-]": 49, "[BH-]": 50, "[BH3-]": 51, "[BH4-]": 52, "[BH]": 53, "[Ba+2]": 54, "[Ba]": 55, "[Be+2]": 56, "[Bi+3]": 57, "[Bi]": 58, "[Br+2]": 59, "[Br+]": 60, "[Br-]": 61, "[C+4]": 62, "[C+]": 63, "[C-]": 64, "[CH+]": 65, "[CH-]": 66, "[CH2+]": 67, "[CH2-]": 68, "[CH2]": 69, "[CH3+]": 70, "[CH3]": 71, "[Ca+2]": 72, "[Ca]": 73, "[Cd+2]": 74, "[Cd+]": 75, "[Cd]": 76, "[Ce+2]": 77, "[Ce+3]": 78, "[Ce+4]": 79, "[Ce]": 80, "[Cl+2]": 81, "[Cl+3]": 82, "[Cl+]": 83, "[Cl-]": 84, "[Co+2]": 85, "[Co+3]": 86, "[Co+]": 87, "[Co]": 88, "[Cr+2]": 89, "[Cr+3]": 90, "[Cr+6]": 91, "[Cr]": 92, "[Cs+]": 93, "[Cs]": 94, "[Cu+2]": 95, "[Cu+3]": 96, "[Cu+]": 97, "[Cu]": 98, "[Dy+3]": 99, "[Eu+3]": 100, "[F-]": 101, "[Fe+2]": 102, "[Fe+3]": 103, "[Fe-3]": 104, "[Fe-4]": 105, "[Fe]": 106, "[Ga+2]": 107, "[Ga+3]": 108, "[Ga+]": 109, "[Ga]": 110, "[GeH4]": 111, "[GeH]": 112, "[Ge]": 113, "[H+]": 114, "[H-]": 115, "[H]": 116, "[He]": 117, "[Hf+4]": 118, "[Hf]": 119, "[Hg+2]": 120, "[Hg+]": 121, "[Hg]": 122, "[I+2]": 123, "[I+3]": 124, "[I+]": 125, "[I-]": 126, "[IH+]": 127, "[IH2+3]": 128, "[IH2+]": 129, "[IH2]": 130, "[IH]": 131, "[In+3]": 132, "[In+]": 133, "[In]": 134, "[Ir]": 135, "[K+]": 136, "[KH]": 137, "[K]": 138, "[La+3]": 139, "[La]": 140, "[Li+]": 141, "[LiH]": 142, "[Li]": 143, "[Mg+2]": 144, "[Mg+]": 145, "[Mg]": 146, "[Mn+2]": 147, "[Mn+3]": 148, "[Mn]": 149, "[Mo]": 150, "[N+3]": 151, "[N+]": 152, "[N-]": 153, "[NH+]": 154, "[NH-]": 155, "[NH2+]": 156, "[NH2-]": 157, "[NH3+]": 158, "[NH4+]": 159, "[Na+]": 160, "[Na]": 161, "[Nd+3]": 162, "[Nd+]": 163, "[Nd]": 164, "[Ni+2]": 165, "[Ni+3]": 166, "[Ni+]": 167, "[Ni]": 168, "[O+]": 169, "[O-]": 170, "[OH+]": 171, "[OH-]": 172, "[OH2+]": 173, "[OH]": 174, "[Os]": 175, "[P+3]": 176, "[P+5]": 177, "[P+]": 178, "[P-]": 179, "[PH+]": 180, "[PH2+]": 181, "[PH2]": 182, "[PH3+]": 183, "[PH3]": 184, "[PH4+]": 185, "[PH4]": 186, "[PH5]": 187, "[PH]": 188, "[Pb+2]": 189, "[Pb+3]": 190, "[Pb+4]": 191, "[Pb]": 192, "[Pd+2]": 193, "[Pd+]": 194, "[Pd-2]": 195, "[Pd-4]": 196, "[Pd-]": 197, "[PdH2]": 198, "[Pd]": 199, "[Pr+3]": 200, "[Pt+2]": 201, "[Pt+3]": 202, "[Pt-]": 203, "[Pt]": 204, "[Rb+]": 205, "[Re]": 206, "[Rh+2]": 207, "[Rh+3]": 208, "[Rh+]": 209, "[Rh]": 210, "[Ru+2]": 211, "[Ru-2]": 212, "[RuH3]": 213, "[Ru]": 214, "[S+]": 215, "[S-]": 216, "[SH+]": 217, "[SH-]": 218, "[SH2+]": 219, "[SH2]": 220, "[SH3+]": 221, "[SH]": 222, "[Sb+5]": 223, "[Sb]": 224, "[Sc+3]": 225, "[Sc]": 226, "[Se-]": 227, "[SeH-]": 228, "[SeH]": 229, "[Se]": 230, "[Si+]": 231, "[Si-]": 232, "[SiH2]": 233, "[SiH3]": 234, "[SiH4]": 235, "[SiH]": 236, "[Si]": 237, "[Sm+2]": 238, "[Sm+3]": 239, "[Sm]": 240, "[Sn+2]": 241, "[Sn+3]": 242, "[Sn+4]": 243, "[Sn+]": 244, "[SnH2]": 245, "[SnH3]": 246, "[SnH4]": 247, "[SnH]": 248, "[Sn]": 249, "[Sr+2]": 250, "[Sr]": 251, "[Ta+2]": 252, "[Ta+5]": 253, "[TaH3]": 254, "[Ta]": 255, "[Te]": 256, "[Ti+2]": 257, "[Ti+3]": 258, "[Ti+4]": 259, "[Ti+5]": 260, "[Ti+]": 261, "[Ti]": 262, "[Tl+2]": 263, "[Tl+3]": 264, "[Tl+]": 265, "[Tl]": 266, "[V+3]": 267, "[V+4]": 268, "[V]": 269, "[W]": 270, "[Xe]": 271, "[Y+3]": 272, "[Yb+3]": 273, "[Yb]": 274, "[Zn+2]": 275, "[Zn+]": 276, "[Zn]": 277, "[Zr+2]": 278, "[Zr+3]": 279, "[Zr+4]": 280, "[Zr+]": 281, "[Zr]": 282, "[c+]": 283, "[c-]": 284, "[n+]": 285, "[n-]": 286, "[nH+]": 287, "[nH]": 288, "[o+]": 289, "[s+]": 290, "[sH+]": 291, "[se]": 292, "b": 293, "c": 294, "n": 295, "o": 296, "p": 297, "s": 298}
+\ No newline at end of file
++{"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "<fwd>": 4, "<rev>": 5, "#": 6, "(": 7, ")": 8, "-": 9, ".": 10, "1": 11, "2": 12, "3": 13, "4": 14, "5": 15, "6": 16, "7": 17, "8": 18, "9": 19, "=": 20, "B": 21, "Br": 22, "C": 23, "Cl": 24, "F": 25, "I": 26, "N": 27, "O": 28, "P": 29, "S": 30, "[Ag+2]": 31, "[Ag+]": 32, "[Ag-]": 33, "[Ag]": 34, "[Al+2]": 35, "[Al+3]": 36, "[Al+]": 37, "[AlH2-]": 38, "[AlH3]": 39, "[AlH4-]": 40, "[AlH]": 41, "[Al]": 42, "[Ar]": 43, "[As+]": 44, "[As]": 45, "[Au-]": 46, "[Au]": 47, "[B+2]": 48, "[B+3]": 49, "[B+]": 50, "[B-]": 51, "[BH-]": 52, "[BH3-]": 53, "[BH4-]": 54, "[BH]": 55, "[Ba+2]": 56, "[Ba]": 57, "[Be+2]": 58, "[Bi+3]": 59, "[Bi]": 60, "[Br+2]": 61, "[Br+]": 62, "[Br-]": 63, "[C+4]": 64, "[C+]": 65, "[C-]": 66, "[CH+]": 67, "[CH-]": 68, "[CH2+]": 69, "[CH2-]": 70, "[CH2]": 71, "[CH3+]": 72, "[CH3]": 73, "[Ca+2]": 74, "[Ca]": 75, "[Cd+2]": 76, "[Cd+]": 77, "[Cd]": 78, "[Ce+2]": 79, "[Ce+3]": 80, "[Ce+4]": 81, "[Ce]": 82, "[Cl+2]": 83, "[Cl+3]": 84, "[Cl+]": 85, "[Cl-]": 86, "[Co+2]": 87, "[Co+3]": 88, "[Co+]": 89, "[Co]": 90, "[Cr+2]": 91, "[Cr+3]": 92, "[Cr+6]": 93, "[Cr]": 94, "[Cs+]": 95, "[Cs]": 96, "[Cu+2]": 97, "[Cu+3]": 98, "[Cu+]": 99, "[Cu]": 100, "[Dy+3]": 101, "[Eu+3]": 102, "[F-]": 103, "[Fe+2]": 104, "[Fe+3]": 105, "[Fe-3]": 106, "[Fe-4]": 107, "[Fe]": 108, "[Ga+2]": 109, "[Ga+3]": 110, "[Ga+]": 111, "[Ga]": 112, "[GeH4]": 113, "[GeH]": 114, "[Ge]": 115, "[H+]": 116, "[H-]": 117, "[H]": 118, "[He]": 119, "[Hf+4]": 120, "[Hf]": 121, "[Hg+2]": 122, "[Hg+]": 123, "[Hg]": 124, "[I+2]": 125, "[I+3]": 126, "[I+]": 127, "[I-]": 128, "[IH+]": 129, "[IH2+3]": 130, "[IH2+]": 131, "[IH2]": 132, "[IH]": 133, "[In+3]": 134, "[In+]": 135, "[In]": 136, "[Ir]": 137, "[K+]": 138, "[KH]": 139, "[K]": 140, "[La+3]": 141, "[La]": 142, "[Li+]": 143, "[LiH]": 144, "[Li]": 145, "[Mg+2]": 146, "[Mg+]": 147, "[Mg]": 148, "[Mn+2]": 149, "[Mn+3]": 150, "[Mn]": 151, "[Mo]": 152, "[N+3]": 153, "[N+]": 154, "[N-]": 155, "[NH+]": 156, "[NH-]": 157, "[NH2+]": 158, "[NH2-]": 159, "[NH3+]": 160, "[NH4+]": 161, "[Na+]": 162, "[Na]": 163, "[Nd+3]": 164, "[Nd+]": 165, "[Nd]": 166, "[Ni+2]": 167, "[Ni+3]": 168, "[Ni+]": 169, "[Ni]": 170, "[O+]": 171, "[O-]": 172, "[OH+]": 173, "[OH-]": 174, "[OH2+]": 175, "[OH]": 176, "[Os]": 177, "[P+3]": 178, "[P+5]": 179, "[P+]": 180, "[P-]": 181, "[PH+]": 182, "[PH2+]": 183, "[PH2]": 184, "[PH3+]": 185, "[PH3]": 186, "[PH4+]": 187, "[PH4]": 188, "[PH5]": 189, "[PH]": 190, "[Pb+2]": 191, "[Pb+3]": 192, "[Pb+4]": 193, "[Pb]": 194, "[Pd+2]": 195, "[Pd+]": 196, "[Pd-2]": 197, "[Pd-4]": 198, "[Pd-]": 199, "[PdH2]": 200, "[Pd]": 201, "[Pr+3]": 202, "[Pt+2]": 203, "[Pt+3]": 204, "[Pt-]": 205, "[Pt]": 206, "[Rb+]": 207, "[Re]": 208, "[Rh+2]": 209, "[Rh+3]": 210, "[Rh+]": 211, "[Rh]": 212, "[Ru+2]": 213, "[Ru-2]": 214, "[RuH3]": 215, "[Ru]": 216, "[S+]": 217, "[S-]": 218, "[SH+]": 219, "[SH-]": 220, "[SH2+]": 221, "[SH2]": 222, "[SH3+]": 223, "[SH]": 224, "[Sb+5]": 225, "[Sb]": 226, "[Sc+3]": 227, "[Sc]": 228, "[Se-]": 229, "[SeH-]": 230, "[SeH]": 231, "[Se]": 232, "[Si+]": 233, "[Si-]": 234, "[SiH2]": 235, "[SiH3]": 236, "[SiH4]": 237, "[SiH]": 238, "[Si]": 239, "[Sm+2]": 240, "[Sm+3]": 241, "[Sm]": 242, "[Sn+2]": 243, "[Sn+3]": 244, "[Sn+4]": 245, "[Sn+]": 246, "[SnH2]": 247, "[SnH3]": 248, "[SnH4]": 249, "[SnH]": 250, "[Sn]": 251, "[Sr+2]": 252, "[Sr]": 253, "[Ta+2]": 254, "[Ta+5]": 255, "[TaH3]": 256, "[Ta]": 257, "[Te]": 258, "[Ti+2]": 259, "[Ti+3]": 260, "[Ti+4]": 261, "[Ti+5]": 262, "[Ti+]": 263, "[Ti]": 264, "[Tl+2]": 265, "[Tl+3]": 266, "[Tl+]": 267, "[Tl]": 268, "[V+3]": 269, "[V+4]": 270, "[V]": 271, "[W]": 272, "[Xe]": 273, "[Y+3]": 274, "[Yb+3]": 275, "[Yb]": 276, "[Zn+2]": 277, "[Zn+]": 278, "[Zn]": 279, "[Zr+2]": 280, "[Zr+3]": 281, "[Zr+4]": 282, "[Zr+]": 283, "[Zr]": 284, "[c+]": 285, "[c-]": 286, "[n+]": 287, "[n-]": 288, "[nH+]": 289, "[nH]": 290, "[o+]": 291, "[s+]": 292, "[sH+]": 293, "[se]": 294, "b": 295, "c": 296, "n": 297, "o": 298, "p": 299, "s": 300}
+\ No newline at end of file
+diff --git a/data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm_one_dir.json b/data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm_one_dir.json
+new file mode 100644
+index 0000000..491a419
+--- /dev/null
++++ b/data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm_one_dir.json
+@@ -0,0 +1 @@
++{"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "#": 4, "(": 5, ")": 6, "-": 7, ".": 8, "1": 9, "2": 10, "3": 11, "4": 12, "5": 13, "6": 14, "7": 15, "8": 16, "9": 17, "=": 18, "B": 19, "Br": 20, "C": 21, "Cl": 22, "F": 23, "I": 24, "N": 25, "O": 26, "P": 27, "S": 28, "[Ag+2]": 29, "[Ag+]": 30, "[Ag-]": 31, "[Ag]": 32, "[Al+2]": 33, "[Al+3]": 34, "[Al+]": 35, "[AlH2-]": 36, "[AlH3]": 37, "[AlH4-]": 38, "[AlH]": 39, "[Al]": 40, "[Ar]": 41, "[As+]": 42, "[As]": 43, "[Au-]": 44, "[Au]": 45, "[B+2]": 46, "[B+3]": 47, "[B+]": 48, "[B-]": 49, "[BH-]": 50, "[BH3-]": 51, "[BH4-]": 52, "[BH]": 53, "[Ba+2]": 54, "[Ba]": 55, "[Be+2]": 56, "[Bi+3]": 57, "[Bi]": 58, "[Br+2]": 59, "[Br+]": 60, "[Br-]": 61, "[C+4]": 62, "[C+]": 63, "[C-]": 64, "[CH+]": 65, "[CH-]": 66, "[CH2+]": 67, "[CH2-]": 68, "[CH2]": 69, "[CH3+]": 70, "[CH3]": 71, "[Ca+2]": 72, "[Ca]": 73, "[Cd+2]": 74, "[Cd+]": 75, "[Cd]": 76, "[Ce+2]": 77, "[Ce+3]": 78, "[Ce+4]": 79, "[Ce]": 80, "[Cl+2]": 81, "[Cl+3]": 82, "[Cl+]": 83, "[Cl-]": 84, "[Co+2]": 85, "[Co+3]": 86, "[Co+]": 87, "[Co]": 88, "[Cr+2]": 89, "[Cr+3]": 90, "[Cr+6]": 91, "[Cr]": 92, "[Cs+]": 93, "[Cs]": 94, "[Cu+2]": 95, "[Cu+3]": 96, "[Cu+]": 97, "[Cu]": 98, "[Dy+3]": 99, "[Eu+3]": 100, "[F-]": 101, "[Fe+2]": 102, "[Fe+3]": 103, "[Fe-3]": 104, "[Fe-4]": 105, "[Fe]": 106, "[Ga+2]": 107, "[Ga+3]": 108, "[Ga+]": 109, "[Ga]": 110, "[GeH4]": 111, "[GeH]": 112, "[Ge]": 113, "[H+]": 114, "[H-]": 115, "[H]": 116, "[He]": 117, "[Hf+4]": 118, "[Hf]": 119, "[Hg+2]": 120, "[Hg+]": 121, "[Hg]": 122, "[I+2]": 123, "[I+3]": 124, "[I+]": 125, "[I-]": 126, "[IH+]": 127, "[IH2+3]": 128, "[IH2+]": 129, "[IH2]": 130, "[IH]": 131, "[In+3]": 132, "[In+]": 133, "[In]": 134, "[Ir]": 135, "[K+]": 136, "[KH]": 137, "[K]": 138, "[La+3]": 139, "[La]": 140, "[Li+]": 141, "[LiH]": 142, "[Li]": 143, "[Mg+2]": 144, "[Mg+]": 145, "[Mg]": 146, "[Mn+2]": 147, "[Mn+3]": 148, "[Mn]": 149, "[Mo]": 150, "[N+3]": 151, "[N+]": 152, "[N-]": 153, "[NH+]": 154, "[NH-]": 155, "[NH2+]": 156, "[NH2-]": 157, "[NH3+]": 158, "[NH4+]": 159, "[Na+]": 160, "[Na]": 161, "[Nd+3]": 162, "[Nd+]": 163, "[Nd]": 164, "[Ni+2]": 165, "[Ni+3]": 166, "[Ni+]": 167, "[Ni]": 168, "[O+]": 169, "[O-]": 170, "[OH+]": 171, "[OH-]": 172, "[OH2+]": 173, "[OH]": 174, "[Os]": 175, "[P+3]": 176, "[P+5]": 177, "[P+]": 178, "[P-]": 179, "[PH+]": 180, "[PH2+]": 181, "[PH2]": 182, "[PH3+]": 183, "[PH3]": 184, "[PH4+]": 185, "[PH4]": 186, "[PH5]": 187, "[PH]": 188, "[Pb+2]": 189, "[Pb+3]": 190, "[Pb+4]": 191, "[Pb]": 192, "[Pd+2]": 193, "[Pd+]": 194, "[Pd-2]": 195, "[Pd-4]": 196, "[Pd-]": 197, "[PdH2]": 198, "[Pd]": 199, "[Pr+3]": 200, "[Pt+2]": 201, "[Pt+3]": 202, "[Pt-]": 203, "[Pt]": 204, "[Rb+]": 205, "[Re]": 206, "[Rh+2]": 207, "[Rh+3]": 208, "[Rh+]": 209, "[Rh]": 210, "[Ru+2]": 211, "[Ru-2]": 212, "[RuH3]": 213, "[Ru]": 214, "[S+]": 215, "[S-]": 216, "[SH+]": 217, "[SH-]": 218, "[SH2+]": 219, "[SH2]": 220, "[SH3+]": 221, "[SH]": 222, "[Sb+5]": 223, "[Sb]": 224, "[Sc+3]": 225, "[Sc]": 226, "[Se-]": 227, "[SeH-]": 228, "[SeH]": 229, "[Se]": 230, "[Si+]": 231, "[Si-]": 232, "[SiH2]": 233, "[SiH3]": 234, "[SiH4]": 235, "[SiH]": 236, "[Si]": 237, "[Sm+2]": 238, "[Sm+3]": 239, "[Sm]": 240, "[Sn+2]": 241, "[Sn+3]": 242, "[Sn+4]": 243, "[Sn+]": 244, "[SnH2]": 245, "[SnH3]": 246, "[SnH4]": 247, "[SnH]": 248, "[Sn]": 249, "[Sr+2]": 250, "[Sr]": 251, "[Ta+2]": 252, "[Ta+5]": 253, "[TaH3]": 254, "[Ta]": 255, "[Te]": 256, "[Ti+2]": 257, "[Ti+3]": 258, "[Ti+4]": 259, "[Ti+5]": 260, "[Ti+]": 261, "[Ti]": 262, "[Tl+2]": 263, "[Tl+3]": 264, "[Tl+]": 265, "[Tl]": 266, "[V+3]": 267, "[V+4]": 268, "[V]": 269, "[W]": 270, "[Xe]": 271, "[Y+3]": 272, "[Yb+3]": 273, "[Yb]": 274, "[Zn+2]": 275, "[Zn+]": 276, "[Zn]": 277, "[Zr+2]": 278, "[Zr+3]": 279, "[Zr+4]": 280, "[Zr+]": 281, "[Zr]": 282, "[c+]": 283, "[c-]": 284, "[n+]": 285, "[n-]": 286, "[nH+]": 287, "[nH]": 288, "[o+]": 289, "[s+]": 290, "[sH+]": 291, "[se]": 292, "b": 293, "c": 294, "n": 295, "o": 296, "p": 297, "s": 298}
+\ No newline at end of file
+diff --git a/rxn_lm/eval_utils/eval_core.py b/rxn_lm/eval_utils/eval_core.py
+index 0ef9375..c7d4a2d 100644
+--- a/rxn_lm/eval_utils/eval_core.py
++++ b/rxn_lm/eval_utils/eval_core.py
+@@ -26,12 +26,13 @@ from transformers import (
+
+ RDLogger.DisableLog('rdApp.*')  # make RDKit quiet
+
+-from ..tokenizer import ReactionBartTokenizer
++from ..tokenizer import ReactionBartTokenizer, FWD_TOKEN, REV_TOKEN
+ from ..settings import VOCAB_FILE_SAVE_NAMES
+ from ..train_utils import train_submethods
+ from . import eval_submethods
+ from .. import utils
+
++
+ LOSS_EVAL_STR = "loss_eval"
+ ACC_EVAL_STR = "acc_eval"
+
+@@ -117,8 +118,7 @@ class EvalArguments:
+     )
+
+     direction: str = field(default="forward", metadata={"help": "Which way to predict the reaction, e.g., forward or "
+-                                                           "backward (for retrosynthesis). Should match whatever"
+-                                                            "direction the model has been trained on."})
++                                                           "backward (for retrosynthesis). "})
+
+     batch_size: int = field(default=16, metadata={"help": "batch size to use."})
+
+@@ -248,12 +248,39 @@ def eval_loop(
+
+     # # 5. Create the data
+     # ## a. preprocess function
++    # ### check the direction is valid (at moment we cannot evaluate in mix mode, but this may change in the future)
++    direction = train_submethods.TaskDirection(eval_args.direction)
++    if direction not in {train_submethods.TaskDirection.FORWARDS, train_submethods.TaskDirection.BACKWARDS}:
++        raise NotImplementedError(f"Direction {direction} not implemented for evaluation.")
++
++    # ### work out how the model was trained (from its checkpoint) and calculate the prefix
++    training_data_args = torch.load(osp.join(main_checkpoint_pth, "data_args.pt"), map_location=device)
++    training_direction = train_submethods.TaskDirection(training_data_args.direction)
++    logger.info(f"Inferred training direction:{training_direction}.")
++
++    if training_direction is train_submethods.TaskDirection.MIX:
++        # if trained in mix mode then we need to add a prefix for the the
++        if direction is train_submethods.TaskDirection.FORWARDS:
++            prefix = FWD_TOKEN
++        elif direction is train_submethods.TaskDirection.BACKWARDS:
++            prefix = REV_TOKEN
++        else:
++            raise NotImplementedError
++
++    else:
++        # else it should be the same as the training direction, and we don't need a prefix
++        prefix = ""
++        if training_direction != direction:
++            warnings.warn(f"Checkpoint trained in {training_direction} but evaluating in {direction}, which is "
++                             " likely inconsistent.")
++    logger.info(f"Using prefix {prefix} for evaluation.")
++
+     preprocess_function = train_submethods.create_preprocess_func(
+                                        tokenizer, eval_args.max_source_length,
+                                        padding=False,
+                                        ignore_pad_token_for_loss=eval_args.ignore_pad_token_for_loss,
+-                                       direction=train_submethods.TaskDirection(eval_args.direction),
+-                                       prefix=""
++                                       direction=direction,
++                                       prefix=prefix
+                                     )
+
+     # ## b. datasets
+diff --git a/rxn_lm/eval_utils/eval_submethods.py b/rxn_lm/eval_utils/eval_submethods.py
+index 4a769ad..7605e5e 100644
+--- a/rxn_lm/eval_utils/eval_submethods.py
++++ b/rxn_lm/eval_utils/eval_submethods.py
+@@ -236,13 +236,15 @@ def clean_pred_func(pred, put_in_frozen_set=False):
+         except:
+             pass
+         return smiles_
+-    pred = canonicalize_ignore_errors(pred)
+
+     if put_in_frozen_set:
+-        pred = frozenset((canonicalize_ignore_errors(el[0]), el[1]) for el in
+-                         collections.Counter(pred.split('.')).items())
+-        # ^ canonicalize may be redundant but cannot work out how rdkit canonicalizes multiple molecule SMILES so being
+-        # defensive here. could in future consider moving it before the counter.
++        # Split first, canonicalize each molecule individually, then count
++        molecules = pred.split('.')
++        canonicalized_molecules = [canonicalize_ignore_errors(mol) for mol in molecules]
++        pred = frozenset((mol, count) for mol, count in
++                         collections.Counter(canonicalized_molecules).items())
++    else:
++        pred = canonicalize_ignore_errors(pred)
+
+     return pred
+
+@@ -600,16 +602,36 @@ def eval_loop(dataloader, model, prepare_inputs,
+     return prediction_outputs, observed_num_examples
+
+
+-def create_metrics_compute_func(tokenizer, clean_pred_func, log=None):
++def create_metrics_compute_func(tokenizer, clean_pred_func, log=None, prefix_id_to_name=None):
+     def compute_metrics(prediction_outputs: PredictionOutput, observed_num_examples):
+         metrics_out = {}
+
++        # # if prefix_id_to_name is not None then look at inputs and work out which belong to each group.
++        if prefix_id_to_name is not None:
++            if prediction_outputs.input_ids is None:
++                raise RuntimeError("Cannot use prefix_id_to_name as input_ids not present in prediction outputs.")
++
++            # Work out which inputs belong to each group, and store the locations as a mask and add the counts to the
++            # metrics_out.
++            prefix_nm_to_locs = {}
++            for id, nm in prefix_id_to_name.items():
++                mask = prediction_outputs.input_ids[:, 0] == id
++                prefix_nm_to_locs[nm] = mask
++                metrics_out[f"{nm}_num"] = mask.sum().item()
++        else:
++            prefix_nm_to_locs = {}
++
++
++
+         # # 1. Loss
+         if prediction_outputs.pseudo_per_item_losses is not None:
+             loss = prediction_outputs.pseudo_per_item_losses.mean()
+             assert prediction_outputs.pseudo_per_item_losses.shape[0] == observed_num_examples
+             metrics_out["loss"] = loss
+
++            for k, v in prefix_nm_to_locs.items():
++                metrics_out[f"{k}_loss"] = prediction_outputs.pseudo_per_item_losses[v].mean()
++
+         # # 2. Accuracy/ Gen Lengths
+         if prediction_outputs.generated_tokens is not None:
+             assert prediction_outputs.generated_tokens.shape[0] % observed_num_examples == 0
+@@ -627,13 +649,14 @@ def create_metrics_compute_func(tokenizer, clean_pred_func, log=None):
+
+             generated_tokens = prediction_outputs.generated_tokens
+             generated_tokens = np.where(generated_tokens != -100, generated_tokens, tokenizer.pad_token_id)
+-            decoded_preds = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
++            with tokenizer.as_target_tokenizer():
++                decoded_preds = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+             if log is not None:
+                 log.debug("finished batch decode (preds)")
+
+             accuracies = np.zeros((observed_num_examples, num_return_sequences))
+-            gen_smile_lengths = -np.ones((observed_num_examples, num_return_sequences))
+-            gen_lengths = np.sum(generated_tokens != tokenizer.pad_token_id, axis=-1).reshape(
++            all_gen_smile_lengths = -np.ones((observed_num_examples, num_return_sequences))
++            all_gen_lengths = np.sum(generated_tokens != tokenizer.pad_token_id, axis=-1).reshape(
+                 (observed_num_examples, num_return_sequences))
+
+             for i, decoded_label in enumerate(tqdm(decoded_labels, desc="checking accuracies.")):
+@@ -642,18 +665,29 @@ def create_metrics_compute_func(tokenizer, clean_pred_func, log=None):
+                     pred = decoded_preds[i*num_return_sequences + j]
+                     canonical_pred = clean_pred_func(pred)
+
+-                    gen_smile_lengths[i, j] = len(pred)
++                    all_gen_smile_lengths[i, j] = len(pred)
+                     accuracies[i, j] = canonical_pred == canonical_label
+
+-            top_k_accuracies = np.mean(np.cumsum(accuracies, axis=1) > 0.5, axis=0)
+-            gen_smile_lengths = np.mean(gen_smile_lengths, axis=0)
+-            gen_lengths = np.mean(gen_lengths, axis=0)
++            all_accuracies = np.cumsum(accuracies, axis=1) > 0.5
++            top_k_accuracies = np.mean(all_accuracies, axis=0)
++            gen_smile_lengths = np.mean(all_gen_smile_lengths, axis=0)
++            gen_lengths = np.mean(all_gen_lengths, axis=0)
+             for i in range(num_return_sequences):
+                 # although we index from 0 in Python, it is more natural to index from 1 when describing top-k
+                 # accuracies in natural language
+                 metrics_out[f"top-{i + 1}_accuracy"] = top_k_accuracies[i]
+                 metrics_out[f"top-{i + 1}_genlength"] = gen_lengths[i]
+                 metrics_out[f"top-{i + 1}_gensmileslength"] = gen_smile_lengths[i]
++
++            for k, v in prefix_nm_to_locs.items():
++
++                gen_lengths = all_gen_lengths[v].mean(axis=0)
++                gen_smile_lengths = all_gen_smile_lengths[v].mean(axis=0)
++                accuracies = all_accuracies[v].mean(axis=0)
++                for i in range(num_return_sequences):
++                    metrics_out[f"{k}_top-{i+1}_accuracy"] = accuracies[i]
++                    metrics_out[f"{k}_top-{i+1}_genlength"] = gen_lengths[i]
++                    metrics_out[f"{k}_top-{i+1}_gensmileslength"] = gen_smile_lengths[i]
+         else:
+             decoded_preds = None
+
+diff --git a/rxn_lm/server_utils/__init__.py b/rxn_lm/server_utils/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/rxn_lm/server_utils/api_types.py b/rxn_lm/server_utils/api_types.py
+new file mode 100644
+index 0000000..824a356
+--- /dev/null
++++ b/rxn_lm/server_utils/api_types.py
+@@ -0,0 +1,36 @@
++from typing import List
++
++from pydantic import BaseModel, Field
++
++from . import pipeline
++from ..train_utils import train_submethods
++
++
++class PredictInput(BaseModel):
++    # match the input type of the pipeline so with duck typing we can use this
++    smiles: str
++    direction: train_submethods.TaskDirection
++
++    def to_pipeline_input(self) -> pipeline.PredInput:
++        return pipeline.PredInput(smiles=self.smiles, direction=self.direction)
++
++
++class IndividualPrediction(BaseModel):
++    smiles: str
++    score: float
++
++
++class PredictOutput(BaseModel):
++    smiles: str
++    direction: train_submethods.TaskDirection
++    predictions: List[IndividualPrediction]
++
++
++class PredictRequest(BaseModel):
++    task_metadata: dict = Field(default_factory=dict, description="Currently unused, but could be used to define"
++                                "task specific options, e.g., model type, beam width etc.")
++    inputs: List[PredictInput]
++
++
++class PredictResponse(BaseModel):
++    outputs: List[PredictOutput]
+diff --git a/rxn_lm/server_utils/pipeline.py b/rxn_lm/server_utils/pipeline.py
+new file mode 100644
+index 0000000..bddc742
+--- /dev/null
++++ b/rxn_lm/server_utils/pipeline.py
+@@ -0,0 +1,170 @@
++from dataclasses import dataclass
++import os.path as osp
++from pathlib import Path
++from typing import Union, List, Dict, Any, Tuple, Optional
++
++import numpy as np
++import torch
++from transformers import BartForConditionalGeneration, Pipeline, pipeline, Text2TextGenerationPipeline
++from transformers.pipelines.text2text_generation import ReturnType
++
++from ..tokenizer import ReactionBartTokenizer, FWD_TOKEN, REV_TOKEN
++from ..train_utils import train_submethods
++
++
++
++
++
++
++class ReactionPipeline(Text2TextGenerationPipeline):
++    """Overwriting the default Text2TextGenerationPipeline to also return scores (i.e., "log probability of sequence").
++
++    Note what actually is a "score" in Hugging Face is not actually immediately always clear. See
++    https://discuss.huggingface.co/t/announcement-generation-get-probabilities-for-generated-output/30075
++
++    Scores are described as "log probabilities" but might not be normalized (due to the logit processing --
++    which as far as I understand actually is done on the log probabilities rather than the logits...).
++    """
++    def _forward(self, model_inputs, **generate_kwargs):
++        if self.framework == "pt":
++            input_length = model_inputs["input_ids"].shape[-1]
++        elif self.framework == "tf":
++            raise NotImplementedError("TF not supported")
++
++        generate_kwargs["min_length"] = generate_kwargs.get("min_length", self.model.config.min_length)
++        generate_kwargs["max_length"] = generate_kwargs.get("max_length", self.model.config.max_length)
++        generate_kwargs["output_scores"] = True
++        generate_kwargs["return_dict_in_generate"] = True
++        self.check_inputs(input_length, generate_kwargs["min_length"], generate_kwargs["max_length"])
++        out = self.model.generate(**model_inputs, **generate_kwargs)
++        return {"output_ids": out["sequences"], "sequences_scores": out["sequences_scores"]}
++
++    def postprocess(self, model_outputs, return_type=ReturnType.TEXT, clean_up_tokenization_spaces=False):
++        records = []
++        for output_ids, seq_score in zip(model_outputs["output_ids"], model_outputs["sequences_scores"]):
++            if return_type == ReturnType.TENSORS:
++                record = {f"{self.return_name}_token_ids": model_outputs, f"{self.return_name}_sequence_score": seq_score}
++            elif return_type == ReturnType.TEXT:
++                record = {
++                    f"{self.return_name}_text": self.tokenizer.decode(
++                        output_ids,
++                        skip_special_tokens=True,
++                        clean_up_tokenization_spaces=clean_up_tokenization_spaces,
++                    ),
++                    f"{self.return_name}_sequence_score": float(seq_score.item())
++                }
++            records.append(record)
++        return records
++
++
++def create_reaction_pipeline(
++    checkpoint_path: Union[str, Path],
++    device: Union[int, None] = None,
++    num_return_sequences: int = 5,
++    num_beams: int = 5,
++    max_length: int = 1024,
++    **kwargs
++) -> Pipeline:
++    """
++    Create a Hugging Face pipeline for reaction prediction using a specific checkpoint.
++
++    Args:
++        checkpoint_path: Path to the model checkpoint directory
++        device: Device to run the model on:
++            - None: Will use CUDA if available, otherwise CPU
++            - -1: CPU
++            - 0 or higher: GPU index
++        num_return_sequences: Number of sequences to return (default: 5)
++        num_beams: Number of beams for beam search (default: 5)
++        max_length: Maximum length of generated sequences (default: 1024)
++        **kwargs: Additional arguments to pass to the pipeline
++
++    Returns:
++        A Hugging Face pipeline configured for reaction prediction
++    """
++    if device is None:
++        device = 0 if torch.cuda.is_available() else -1
++
++    # Create model and tokenizer from checkpoint
++    model = BartForConditionalGeneration.from_pretrained(checkpoint_path)
++    tokenizer = ReactionBartTokenizer.from_pretrained(checkpoint_path)
++
++    # Verify model and tokenizer are consistent
++    assert model.get_input_embeddings().weight.shape[0] == len(tokenizer), "Model and tokenizer inconsistent"
++
++    # Set model to evaluation mode to disable dropout and other training-specific behaviors
++    model.eval()
++
++    # Work out direction model was trained for.
++    training_data_args = torch.load(osp.join(checkpoint_path, "data_args.pt"), map_location=device)
++    training_direction = train_submethods.TaskDirection(training_data_args.direction)
++
++    # Create pipeline with beam search
++    pipe = ReactionPipeline(
++        model=model,
++        tokenizer=tokenizer,
++        device=device,
++        num_return_sequences=num_return_sequences,
++        num_beams=num_beams,
++        max_length=max_length,
++        **kwargs
++    )
++
++    # we will also store the direction
++    pipe.direction_used_in_training = training_direction
++
++    return pipe
++
++
++@dataclass
++class PredInput:
++    smiles: str
++    direction: Union[str, train_submethods.TaskDirection]
++
++    def __post_init__(self):
++        if isinstance(self.direction, str):
++            self.direction = train_submethods.TaskDirection(self.direction)
++
++
++def run_pipeline(
++    pipe,
++    inputs: List[PredInput],
++    batch_size: int = 32,
++    **kwargs
++) -> List[Dict[str, Any]]:
++    """
++    Run the pipeline on a batch of inputs.
++
++    Args:
++        pipe: Hugging Face pipeline to use
++        inputs: List of input dictionaries, each containing the text to process
++        batch_size: Maximum number of inputs to process at once (default: 32)
++        **kwargs: Additional arguments to pass to the pipeline's __call__ method
++
++    Returns:
++        List of output dictionaries containing the generated sequences
++    """
++    #TODO: maybe want to move some of this logic to the subclass of pipeline?
++    if pipe.direction_used_in_training == train_submethods.TaskDirection.MIX:
++        def process_input(input: PredInput) -> str:
++            if input.direction == train_submethods.TaskDirection.FORWARDS:
++                return f"{FWD_TOKEN}{input.smiles}"
++            elif input.direction == train_submethods.TaskDirection.BACKWARDS:
++                return f"{REV_TOKEN}{input.smiles}"
++            else:
++                raise ValueError(f"Invalid direction: {input.direction}")
++    else:
++        def process_input(input: PredInput) -> str:
++            assert input.direction == pipe.direction_used_in_training, "inconsistent direction"
++            return input.smiles
++
++    # Convert to a list of strings (checking direction is valid for each)
++    processed_inputs = []
++    for input in inputs:
++        processed_inputs.append(process_input(input))
++
++    out = pipe(processed_inputs, batch_size=batch_size, **kwargs)
++
++    return out
++
++
+diff --git a/rxn_lm/tokenizer.py b/rxn_lm/tokenizer.py
+index 798e9c2..6a8dfd9 100644
+--- a/rxn_lm/tokenizer.py
++++ b/rxn_lm/tokenizer.py
+@@ -12,6 +12,11 @@ from transformers.utils import logging as t_logger
+ from .settings import VOCAB_FILE_SAVE_NAMES
+
+
++FWD_TOKEN = "<fwd>"
++REV_TOKEN = "<rev>"
++NUM_CHARS_IN_FIRST_TOKEN = len(FWD_TOKEN)
++
++
+ class RegexModel:
+     """
+     See https://arxiv.org/abs/1711.04810; the change we made was just to extend this to include more possible loops
+@@ -73,7 +78,16 @@ class ReactionBartTokenizer(PreTrainedTokenizer):
+         return dict(self.encoder, **self.added_tokens_encoder)
+
+     def _tokenize(self, text, **kwargs):
+-        return self.regex_model(text)
++        first_five_chars = text[:NUM_CHARS_IN_FIRST_TOKEN]
++        if first_five_chars == FWD_TOKEN:
++            start = [FWD_TOKEN]
++            text = text[NUM_CHARS_IN_FIRST_TOKEN:]
++        elif first_five_chars == REV_TOKEN:
++            start = [REV_TOKEN]
++            text = text[NUM_CHARS_IN_FIRST_TOKEN:]
++        else:
++            start = []
++        return start + self.regex_model(text)
+
+     def _convert_token_to_id(self, token):
+         return self.encoder.get(token, self.encoder.get(self.unk_token))
+@@ -100,8 +114,10 @@ class ReactionBartTokenizer(PreTrainedTokenizer):
+
+     @classmethod
+     def create_a_vocab(cls, molecule_lines_iterator, special_characters=None):
++        """Note currently assumes that you only have reactions in the lines and no other tokens, including
++        no of the fwd/rev tokens."""
+         if special_characters is None:
+-            special_characters = ["<s>", "<pad>", "</s>", "<unk>"]
++            special_characters = ["<s>", "<pad>", "</s>", "<unk>", FWD_TOKEN, REV_TOKEN]
+         regex_model = RegexModel()
+         all_tokens = set(itertools.chain(*(regex_model(molecule_section)
+                                                 for line in molecule_lines_iterator
+diff --git a/rxn_lm/train_utils/train_submethods.py b/rxn_lm/train_utils/train_submethods.py
+index 399a39a..f128d98 100644
+--- a/rxn_lm/train_utils/train_submethods.py
++++ b/rxn_lm/train_utils/train_submethods.py
+@@ -240,6 +240,7 @@ Copyright 2018- The Hugging Face team. All rights reserved.
+
+ import collections
+ import enum
++import hashlib
+ import json
+ from typing import (
+     Any,
+@@ -254,14 +255,17 @@ from typing import (
+
+ import torch
+ from ignite import engine, base
++import numpy as np
+ from ray import tune
+ from torch import nn
+ from torch import optim
+ from torch.utils import data
++from transformers import PreTrainedTokenizer
+ from transformers import trainer_pt_utils
++from rdkit import Chem
+
+ from rxn_lm.settings import REACTANTS_KEY, PRODUCTS_KEY
+-
++from .. import tokenizer
+
+ def tune_search_space_from_json(json_in):
+     """
+@@ -385,6 +389,7 @@ class EarlyStopper(base.Serializable):
+ class TaskDirection(enum.Enum):
+     FORWARDS = "forward"  # i.e., reaction prediction
+     BACKWARDS = "backward"  # i.e., one-step retro-synthesis, have not actually used the model for this!
++    MIX = "mix"  # i.e., both directions, sampled randomly.
+
+
+ class ReactionData(data.Dataset):
+@@ -435,20 +440,111 @@ class ReactionData(data.Dataset):
+             smiles_lines = [json.loads(e) for e in smiles_lines if len(e)]
+         return cls(smiles_lines)
+
++class RandomMixing():
++    def __init__(self, rng: np.random.RandomState):
++        self.rng = rng
+
+-def create_preprocess_func(tokenizer, max_length, padding, ignore_pad_token_for_loss,
+-                           direction=TaskDirection.FORWARDS, prefix=""):
++    def __call__(self, example):
++        if self.rng.randint(0, 2):
++            # swap reactants and products
++            return {"prompt": tokenizer.FWD_TOKEN, "key-0": REACTANTS_KEY, "key-1": PRODUCTS_KEY}
++        else:
++            # keep reactants and products
++            return {"prompt": tokenizer.REV_TOKEN, "key-0": PRODUCTS_KEY, "key-1": REACTANTS_KEY}
++
++class DeterministicRandomMixing():
++    """ always picks the same direction based on first charachter of hash of reaction string"""
++    def __call__(self, example):
++        # hash the reaction string
++        reaction_string = example["translation"][REACTANTS_KEY] + ">>" + example["translation"][PRODUCTS_KEY]
++        hash_value = hashlib.md5(reaction_string.encode("utf-8")).digest()[-1]
++        if hash_value % 2 == 0:
++            # swap reactants and products
++            return {"prompt": tokenizer.FWD_TOKEN, "key-0": REACTANTS_KEY, "key-1": PRODUCTS_KEY}
++        else:
++            # keep reactants and products
++            return {"prompt": tokenizer.REV_TOKEN, "key-0": PRODUCTS_KEY, "key-1": REACTANTS_KEY}
++
++
++class SmilesAugmentation:
++    """Augments a SMILES string by optionally shuffling its .-separated parts and/or enumerating individual molecules."""
++    def __init__(self, shuffle_molecules: bool = False, enumerate_smiles: bool = False, seed: int = 42):
++        self.shuffle_molecules = shuffle_molecules
++        self.enumerate_smiles = enumerate_smiles
++        self.seed = seed
++        self._rng = np.random.RandomState(seed)
++        # https://github.com/rdkit/rdkit/discussions/6489
++
++        # note that the seed does not deal with the random seed for the augmenting the SMILES -- not sure if there is
++        # a way to currently control this:
++        # https://github.com/rdkit/rdkit/discussions/6489
++
++
++    def __call__(self, smiles_str: str) -> str:
++        if not isinstance(smiles_str, str) or not smiles_str:
++            return smiles_str
++
++        parts = smiles_str.split('.')
++
++        if self.shuffle_molecules and len(parts) > 1:
++            self._rng.shuffle(parts) # In-place shuffle using instance-specific RNG
++
++        augmented_parts = []
++        for part_smiles in parts:
++            if self.enumerate_smiles and ((mol := Chem.MolFromSmiles(part_smiles)) is not None):
++                augmented_parts.append(Chem.MolToSmiles(mol, doRandom=True))
++            else:
++                augmented_parts.append(part_smiles) # Keep original if invalid SMILES or not enumerating.
++        return '.'.join(augmented_parts)
++
++
++def create_preprocess_func(tokenizer: PreTrainedTokenizer, max_length: int, padding,
++                           ignore_pad_token_for_loss: bool,
++                           direction: TaskDirection = TaskDirection.FORWARDS,
++                           prefix: str = "",
++                           mixing_func: Optional[Callable[[dict], dict]] = None,
++                           augment_input_smiles_fn: Optional[Callable[[str], str]] = None,
++                           augment_target_smiles_fn: Optional[Callable[[str], str]] = None):
++
++
++    # we will first create a function that gets the inputs and targets (and prompt if applicable) for the given direction
++    # if no prompt should be empty string
+     if direction is TaskDirection.FORWARDS:
+-        src_key = REACTANTS_KEY
+-        tgt_key = PRODUCTS_KEY
++        def get_inputs_outputs(example):
++            inputs = example["translation"][REACTANTS_KEY]
++            targets = example["translation"][PRODUCTS_KEY]
++            return inputs, targets, ""
++    elif direction is TaskDirection.BACKWARDS:
++        def get_inputs_outputs(example):
++            inputs = example["translation"][PRODUCTS_KEY]
++            targets = example["translation"][REACTANTS_KEY]
++            return inputs, targets, ""
++    elif direction is TaskDirection.MIX:
++        if mixing_func is None:
++            raise ValueError("Mixing function must be provided for mixed direction")
++        def get_inputs_outputs(example):
++            chosen_direction = mixing_func(example)
++            inputs = example["translation"][chosen_direction["key-0"]]
++            targets = example["translation"][chosen_direction["key-1"]]
++
++            # add the prompt (without a space to the token.)
++            example_prompt = chosen_direction["prompt"]
++            return inputs, targets, example_prompt
+     else:
+-        src_key = PRODUCTS_KEY
+-        tgt_key = REACTANTS_KEY
++        raise NotImplementedError(f"Task direction {direction} not implemented")
+
+     def preprocess_function(example):
+-        inputs = example["translation"][src_key]
+-        targets = example["translation"][tgt_key]
+-        inputs = prefix + inputs
++        inputs, targets, example_prompt = get_inputs_outputs(example)
++        # Augment input SMILES string if function is provided
++        if augment_input_smiles_fn is not None:
++            inputs = augment_input_smiles_fn(inputs)
++
++        # Augment target SMILES string if function is provided
++        if augment_target_smiles_fn is not None:
++            targets = augment_target_smiles_fn(targets)
++
++        # Add the prompt & prefix to the input text.
++        inputs = prefix + example_prompt + inputs
+         model_inputs = tokenizer(inputs, max_length=max_length, truncation=True)
+
+         # Set up the tokenizer for targets
+diff --git a/rxn_lm/train_utils/training_core.py b/rxn_lm/train_utils/training_core.py
+index c465fde..8dd756d 100644
+--- a/rxn_lm/train_utils/training_core.py
++++ b/rxn_lm/train_utils/training_core.py
+@@ -13,6 +13,8 @@ from typing import (
+     Callable
+ )
+
++import numpy as np
++import pandas as pd
+ import tabulate
+ import torch
+ import wandb
+@@ -33,12 +35,15 @@ from ..settings import OPTIMIZER_CHKPT_NAME, SCHEDULER_CHKPT_NAME, TRAIN_ENGINE_
+ RDLogger.DisableLog('rdApp.*')
+
+ from . import train_submethods
+-from ..tokenizer import ReactionBartTokenizer
++from ..tokenizer import ReactionBartTokenizer, FWD_TOKEN, REV_TOKEN
+ from ..json_utils import to_serializable
+ from .. import utils
+ from ..eval_utils import eval_submethods
+
+
++NUM_EXAMPLES_TO_LOG_IN_WANDB_ON_FULL_EVAL = 10
++
++
+ @dataclass
+ class BartParams:
+     encoder_layers: int = 12
+@@ -87,7 +92,15 @@ class DataTrainingArguments:
+     )
+
+     direction: str = field(default=None, metadata={"help": "Which way to predict the reaction, e.g., forward or "
+-                                                           "backward (for retrosynthesis)."})
++                                                           "backward (for retrosynthesis) or mix."})
++
++    # the below options are only used during training at the moment.
++    input_smiles_augmentation: bool = field(default=False, metadata={"help": "Whether to augment the input SMILES. "
++                                                                     "(i.e., take random SMILES from the dataset)"})
++    input_order_augmentation: bool = field(default=False, metadata={"help": "Whether to augment the input order."})
++    target_smiles_augmentation: bool = field(default=False, metadata={"help": "Whether to augment the target SMILES."})
++    target_order_augmentation: bool = field(default=False, metadata={"help": "Whether to augment the target order."})
++
+     dataloaders_num_workers: int = field(
+         default=0,
+         metadata={"help": "The number of processes to use for the dataloaders."},
+@@ -266,14 +279,60 @@ def train_eval_loop(
+     # ## a. preprocessing
+     tokenizer = ReactionBartTokenizer(data_args.vocab_file)
+     logger.info(f"Using vocab file: {data_args.vocab_file}.")
+-    preprocess_function = train_submethods.create_preprocess_func(
+-                                       tokenizer, data_args.max_source_length,
+-                                       padding=False,
+-                                       ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
+-                                       direction=train_submethods.TaskDirection(data_args.direction),
+-                                       prefix=""
++    direction = train_submethods.TaskDirection(data_args.direction)
++
++    augment_input_smiles_fn = None
++    if data_args.input_smiles_augmentation or data_args.input_order_augmentation:
++        augment_input_smiles_fn = train_submethods.SmilesAugmentation(
++            shuffle_molecules=data_args.input_order_augmentation,
++            enumerate_smiles=data_args.input_smiles_augmentation,
++            seed=training_args.seed  # Use the main training seed for reproducibility
++        )
++        logger.info(f"Input SMILES augmentation enabled: shuffle_molecules={data_args.input_order_augmentation}, "
++                    f" enumerate_smiles={data_args.input_smiles_augmentation}")
++
++    augment_target_smiles_fn = None
++    if data_args.target_smiles_augmentation or data_args.target_order_augmentation:
++        augment_target_smiles_fn = train_submethods.SmilesAugmentation(
++            shuffle_molecules=data_args.target_order_augmentation,
++            enumerate_smiles=data_args.target_smiles_augmentation,
++            seed=training_args.seed  # Use the main training seed for reproducibility
++        )
++        logger.info(f"Target SMILES augmentation enabled: shuffle_molecules={data_args.target_order_augmentation}, "
++                    f" enumerate_smiles={data_args.target_smiles_augmentation}")
++
++
++
++    if direction == train_submethods.TaskDirection.MIX:
++        train_mixing_func = train_submethods.RandomMixing(rng=np.random.RandomState(seed=training_args.seed))
++        eval_mixing_func = train_submethods.DeterministicRandomMixing()
++        logger.debug("Using different mixing functions for train and eval")
++    else:
++        train_mixing_func = None
++        eval_mixing_func = None
++        logger.debug("Not using a mixing function")
++
++    preprocess_function_train = train_submethods.create_preprocess_func(
++                                    tokenizer, data_args.max_source_length,
++                                    padding=False,
++                                    ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
++                                    direction=direction, prefix="",
++                                    mixing_func=train_mixing_func,
++                                    augment_input_smiles_fn=augment_input_smiles_fn,
++                                    augment_target_smiles_fn=augment_target_smiles_fn,
+                                     )
+
++    preprocess_function_eval = train_submethods.create_preprocess_func(
++                                tokenizer, data_args.max_source_length,
++                                padding=False,
++                                ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
++                                direction=direction, prefix="",
++                                mixing_func=eval_mixing_func,
++                                augment_input_smiles_fn=None,
++                                augment_target_smiles_fn=None,
++                                )
++
++
+     # ## b. datasets
+     # at this point we will create a second validation dataset -- validation_acc. This is the same as the regular
+     # validation but may be truncated to a smaller size to ensure that it can be used for accuracy calculations without
+@@ -284,6 +343,7 @@ def train_eval_loop(
+                        validation=data_args.max_eval_samples,
+                        validation_acc=data_args.max_eval_samples_for_acc_logging,
+                        test=data_args.max_eval_samples_for_acc_logging_test)
++    training_set_names = {"train"}
+     for name, file_name in [("train", data_args.train_file),
+                             ("validation", data_args.validation_file),
+                             ("validation_acc", data_args.validation_file),
+@@ -291,7 +351,12 @@ def train_eval_loop(
+         if file_name is not None:
+             data_files[name] = file_name
+             raw_datasets[name] = train_submethods.ReactionData.from_jsonl_file(file_name)
+-            raw_datasets[name].transform = preprocess_function
++            if name in training_set_names:
++                logger.debug(f"Setting {name} preprocess func to the training one.")
++                raw_datasets[name].transform = preprocess_function_train
++            else:
++                logger.debug(f"Setting {name} preprocess func to the eval one.")
++                raw_datasets[name].transform = preprocess_function_eval
+
+             # if user has limited amount of data then truncate dataset size
+             data_limit = data_limits[name]
+@@ -399,7 +464,17 @@ def train_eval_loop(
+     logger.info(f"trainer engine state is: {trainer.state_dict()}")
+
+     # # 8. Create metrics function
+-    compute_metrics_func = eval_submethods.create_metrics_compute_func(tokenizer, clean_pred_func=eval_submethods.clean_pred_func)
++    if direction is train_submethods.TaskDirection.MIX:
++        prefix_id_to_name = {
++            int(tokenizer._convert_token_to_id(FWD_TOKEN)): "fwd",
++            int(tokenizer._convert_token_to_id(REV_TOKEN)): "rev",
++        }
++    else: prefix_id_to_name = None
++
++    compute_metrics_func = eval_submethods.create_metrics_compute_func(tokenizer,
++                                                        clean_pred_func=lambda pred: eval_submethods.clean_pred_func(pred, put_in_frozen_set=True),
++                                                        prefix_id_to_name=prefix_id_to_name
++                                                        )
+
+     # # 9. Create early stopper if appropriate
+     if training_args.patience is not None and training_args.patience > 0:
+@@ -484,17 +559,18 @@ def train_eval_loop(
+         we may want to run this on a smaller dataloader than the regular evaluation (as its expensive to generate);
+         therefore we can take in a specific dataloader and name to print out.
+         """
+-        prediction_outputs, observed_num_examples = eval_submethods.eval_loop(dataloader_to_use,
+-                                                                         model,
+-                                                                         functools.partial(prepare_batch,
+-                                                                                           device=device,
+-                                                                                           non_blocking=None),
+-                                                                         eval_submethods.PredictionStepArgs(
+-                                                                             teacher_forcing=False,
+-                                                                             max_length=data_args.max_target_length,
+-                                                                             num_beams=data_args.num_beams),
+-                                                                         use_tqdm=use_tqdm
+-                                                                         )
++        prediction_outputs, observed_num_examples = eval_submethods.eval_loop(
++            dataloader_to_use,
++            model,
++            functools.partial(prepare_batch, device=device, non_blocking=None),
++            eval_submethods.PredictionStepArgs(
++                teacher_forcing=False,
++                max_length=data_args.max_target_length,
++                num_beams=data_args.num_beams,
++                collect_input_ids=True  # need for getting metrics for the different prompts
++            ),
++            use_tqdm=use_tqdm
++        )
+         metrics, decoded_preds = compute_metrics_func(prediction_outputs, observed_num_examples)
+
+         logger.info(f" Epoch {epoch} [Step {iteration}] Val {name} Loss: {metrics['loss']:.4f}")
+@@ -507,18 +583,50 @@ def train_eval_loop(
+         logger.info(
+             f"\n results {name} ({observed_num_examples} examples): \n" + tabulate.tabulate(rows, headers=["top-k", "accuracy", "genlen", "gensmileslen"]))
+         wandb.log({f"eval_{name}_" + k: v for k, v in metrics.items()})
++
++        # Create DataFrame with top examples for wandb table
++        num_examples = min(NUM_EXAMPLES_TO_LOG_IN_WANDB_ON_FULL_EVAL, observed_num_examples)
++        assert len(decoded_preds) % observed_num_examples == 0, "Number of decoded predictions must be divisible by number of examples"
++        inferred_num_preds_per_item = len(decoded_preds) // observed_num_examples
++        table_data = []
++        for i in range(num_examples):
++            with tokenizer.as_target_tokenizer():
++                labels_for_i = np.where(prediction_outputs.labels[i] != -100, prediction_outputs.labels[i], tokenizer.pad_token_id)
++                ground_truth = tokenizer.decode(labels_for_i, skip_special_tokens=True)
++            inputs_for_i = np.where(prediction_outputs.input_ids[i] != -100, prediction_outputs.input_ids[i], tokenizer.pad_token_id)
++            reactants = tokenizer.decode(inputs_for_i, skip_special_tokens=True)
++            example = {
++                'reactants': reactants,
++                'ground_truth': ground_truth,
++            }
++
++            # Add top-k predictions
++            for k in range(metrics['num_inferred_return_sequences']):
++                example[f'prediction_top_{k}'] = decoded_preds[i * inferred_num_preds_per_item + k]
++            table_data.append(example)
++        df = pd.DataFrame(table_data)
++        wandb.log({f"eval_{name}_examples": wandb.Table(dataframe=df)})
++
+         return metrics, decoded_preds
+
+     def teacher_forced_eval(trainer):
+         prediction_outputs, observed_num_examples = eval_submethods.eval_loop(dataloaders['validation'],
+                              model,
+                              functools.partial(prepare_batch, device=device, non_blocking=None),
+-                             eval_submethods.PredictionStepArgs(teacher_forcing=True, max_length=data_args.max_target_length),
++                             eval_submethods.PredictionStepArgs(teacher_forcing=True, max_length=data_args.max_target_length, collect_input_ids=True),
+                              use_tqdm=use_tqdm
+                              )
++
++        # compute the various losses:
+         loss = prediction_outputs.pseudo_per_item_losses.mean()
++        other_losses = {}
++        if prefix_id_to_name is not None:
++            for id, nm in prefix_id_to_name.items():
++                other_losses[f"{nm}_loss"] = prediction_outputs.pseudo_per_item_losses[prediction_outputs.input_ids[:, 0] == id].mean()
++        #TODO: move to use the metrics function.
++
+         logger.info(f"Step {trainer.state.iteration} Epoch[{trainer.state.epoch}] Val Loss: {loss:.4f}")
+-        wandb.log(dict(eval_loss=loss))
++        wandb.log(dict(eval_loss=loss, **{f"eval_{k}":v for k,v in other_losses.items()}))
+         metrics = dict(loss=loss, iteration=trainer.state.iteration)
+         return metrics
+
+diff --git a/scripts/data_prep/02_create_vocab.py b/scripts/data_prep/02_create_vocab.py
+index 4d27723..0b18be4 100644
+--- a/scripts/data_prep/02_create_vocab.py
++++ b/scripts/data_prep/02_create_vocab.py
+@@ -23,6 +23,7 @@ from rxn_lm import tokenizer
+ class Params:
+     files_to_read: typing.List[str]
+     vocab_fname: str = "vocab.json"
++    jsonl_files: bool = True
+
+
+ def main(params: Params):
+@@ -34,7 +35,11 @@ def main(params: Params):
+                     if len(line) == 0:
+                         continue
+                     else:
+-                        yield line
++                        if params.jsonl_files:
++                            d = json.loads(line)
++                            yield f"{d['translation']['reactants']}>>{d['translation']['products']}"
++                        else:
++                            yield line
+
+         return file_generator()
+
+diff --git a/scripts/serving/serve.py b/scripts/serving/serve.py
+new file mode 100644
+index 0000000..66972a3
+--- /dev/null
++++ b/scripts/serving/serve.py
+@@ -0,0 +1,97 @@
++"""
++Start using :
++`WEIGHTS_PATH=<path to model weights> serve run serve:main_deployment `
++"""
++
++
++import argparse
++import itertools
++import os
++from typing import List
++
++from fastapi import FastAPI
++import ray
++from ray import serve
++
++from rxn_lm.server_utils import pipeline, api_types
++
++
++app = FastAPI(title="rxn-lm", summary="Predict reactions from SMILES strings!")
++
++
++def batched(iterable, n, strict=False):
++    """
++    Batches an iterable into chunks of size n.
++    If strict is True, will raise an error if the batch size is less than n. Pre Python 3.12 version of itertools.batched.
++    """
++    if n < 1:
++        raise ValueError('n must be at least one')
++    it = iter(iterable)
++    while True:
++        batch = tuple(itertools.islice(it, n))
++        if not batch:
++            break
++        elif len(batch) < n and strict:
++            raise ValueError(f"Batch size {len(batch)} is less than {n}")
++        yield batch
++
++
++@serve.deployment(num_replicas=1, ray_actor_options={"num_gpus": 1})
++class ModelPipeline:
++    def __init__(self, model_path: str):
++        self.num_return_sequences = 5
++        self.batch_size = 32
++        # ^ currently hardcoded but possible to change in future
++        self.pipe = pipeline.create_reaction_pipeline(model_path, num_return_sequences=self.num_return_sequences)
++
++    def run_pipeline(self, inputs: List[api_types.PredictInput]) -> List[api_types.PredictOutput]:
++        pipeline_inputs = [input.to_pipeline_input() for input in inputs]
++        pipe_outputs = pipeline.run_pipeline(self.pipe, pipeline_inputs, batch_size=self.batch_size)
++
++        outputs = []
++
++        # putting in strict mode as model should return num_return_sequences per input. if it doesn't,
++        # then we have a problem as cannot match up outputs with inputs.. so will just fail loudly.
++        for i, result in enumerate(batched(pipe_outputs, self.num_return_sequences, strict=True)):
++            outputs.append(api_types.PredictOutput(
++                smiles=inputs[i].smiles,
++                direction=inputs[i].direction,
++                predictions=[
++                    api_types.IndividualPrediction(
++                        smiles=res["generated_text"],
++                        score=res["generated_sequence_score"]
++                    )
++                    for res in result
++                ]
++            ))
++
++        return outputs
++
++
++@serve.deployment(route_prefix="/")
++@serve.ingress(app)
++class MainDeployment:
++    def __init__(self, model: ModelPipeline):
++        self.model = model
++
++    @app.post("/predict")
++    async def root(self, request: api_types.PredictRequest) -> api_types.PredictResponse:
++        model_serve_response = await self.model.run_pipeline.remote(request.inputs)
++        list_of_outputs = await model_serve_response
++
++        # note the two awaits are on purpose! better than using .get() as that will block
++        # https://docs.ray.io/en/releases-2.2.0/serve/model_composition.html#:~:text=You%20can%20use,get%20inside%20deployments.
++
++        return api_types.PredictResponse(outputs=list_of_outputs)
++
++
++# parser = argparse.ArgumentParser()
++# parser.add_argument("--model_path", type=str, required=True)
++# parser.add_argument("--port", type=int, default=8050)
++# args = parser.parse_args()
++# serve.run(MainDeployment.bind(ModelPipeline.bind(args.model_path)), port=args.port)
++
++weights_path = os.environ["WEIGHTS_PATH"]
++print(f"Using weights from {weights_path}")
++main_deployment = MainDeployment.bind(ModelPipeline.bind(weights_path))
++
+diff --git a/scripts/training/configs/uspto_augm/uspto_stereo_mixed_backward_direction.json b/scripts/training/configs/uspto_augm/uspto_stereo_mixed_backward_direction.json
+new file mode 100644
+index 0000000..2176c29
+--- /dev/null
++++ b/scripts/training/configs/uspto_augm/uspto_stereo_mixed_backward_direction.json
+@@ -0,0 +1,41 @@
++{
++  "direction": "backward",
++  "train_file": "../../../../data/processed/USPTO_mixed_augm/train.jsonl",
++  "validation_file": "../../../../data/processed/USPTO_mixed_augm/valid.jsonl",
++  "test_file": "../../../../data/processed/USPTO_mixed_augm/test.jsonl",
++  "vocab_file": "../../../../data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm.json",
++  "dataloaders_num_workers": 10,
++  "do_train": true,
++  "do_pred": true,
++
++  "num_beams": 5,
++  "num_return_sequences": 5,
++
++  "encoder_layers": 11,
++  "encoder_ffn_dim": 1024,
++  "encoder_attention_heads": 8,
++
++  "decoder_layers": 11,
++  "decoder_ffn_dim": 1024,
++  "decoder_attention_heads": 8,
++
++  "d_model": 256,
++
++  "dropout": 0.2036459447310158,
++
++
++  "num_steps": 10000000,
++  "gradient_accumulation_steps": 1,
++  "train_batch_size": 32,
++  "val_batch_size": 32,
++
++  "learning_rate": 0.00026402113347040717,
++  "lr_scheduler_type":"cosine",
++  "lr_scheduler_warmup_ga_steps": 5000,
++
++  "max_eval_samples_for_acc_logging": 250,
++  "max_eval_samples_for_acc_logging_test": 250,
++  "log_interval_for_eval_loss": 1000,
++  "log_interval_for_acc": 50000,
++  "chkpts_to_keep": 30
++}
+\ No newline at end of file
+diff --git a/scripts/training/configs/uspto_augm/uspto_stereo_mixed_mixed_direction.json b/scripts/training/configs/uspto_augm/uspto_stereo_mixed_mixed_direction.json
+new file mode 100644
+index 0000000..0f71dfd
+--- /dev/null
++++ b/scripts/training/configs/uspto_augm/uspto_stereo_mixed_mixed_direction.json
+@@ -0,0 +1,41 @@
++{
++  "direction": "mix",
++  "train_file": "../../../../data/processed/USPTO_mixed_augm/train.jsonl",
++  "validation_file": "../../../../data/processed/USPTO_mixed_augm/valid.jsonl",
++  "test_file": "../../../../data/processed/USPTO_mixed_augm/test.jsonl",
++  "vocab_file": "../../../../data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm.json",
++  "dataloaders_num_workers": 10,
++  "do_train": true,
++  "do_pred": true,
++
++  "num_beams": 5,
++  "num_return_sequences": 5,
++
++  "encoder_layers": 11,
++  "encoder_ffn_dim": 1024,
++  "encoder_attention_heads": 8,
++
++  "decoder_layers": 11,
++  "decoder_ffn_dim": 1024,
++  "decoder_attention_heads": 8,
++
++  "d_model": 256,
++
++  "dropout": 0.2036459447310158,
++
++
++  "num_steps": 10000000,
++  "gradient_accumulation_steps": 1,
++  "train_batch_size": 32,
++  "val_batch_size": 32,
++
++  "learning_rate": 0.00026402113347040717,
++  "lr_scheduler_type":"cosine",
++  "lr_scheduler_warmup_ga_steps": 5000,
++
++  "max_eval_samples_for_acc_logging": 250,
++  "max_eval_samples_for_acc_logging_test": 250,
++  "log_interval_for_eval_loss": 1000,
++  "log_interval_for_acc": 50000,
++  "chkpts_to_keep": 30
++}
+\ No newline at end of file
+diff --git a/scripts/training/configs/uspto_augm/uspto_stereo_mixed_mixed_direction_augm.json b/scripts/training/configs/uspto_augm/uspto_stereo_mixed_mixed_direction_augm.json
+new file mode 100644
+index 0000000..d895b55
+--- /dev/null
++++ b/scripts/training/configs/uspto_augm/uspto_stereo_mixed_mixed_direction_augm.json
+@@ -0,0 +1,46 @@
++{
++  "direction": "mix",
++  "train_file": "../../../../data/processed/USPTO_mixed_augm/train.jsonl",
++  "validation_file": "../../../../data/processed/USPTO_mixed_augm/valid.jsonl",
++  "test_file": "../../../../data/processed/USPTO_mixed_augm/test.jsonl",
++  "vocab_file": "../../../../data/processed/USPTO_mixed_augm/vocab_uspto_mixed_augm.json",
++  "dataloaders_num_workers": 10,
++  "do_train": true,
++  "do_pred": true,
++
++  "num_beams": 5,
++  "num_return_sequences": 5,
++
++  "encoder_layers": 7,
++  "encoder_ffn_dim": 1024,
++  "encoder_attention_heads": 32,
++
++  "decoder_layers": 11,
++  "decoder_ffn_dim": 1024,
++  "decoder_attention_heads": 4,
++
++  "d_model": 256,
++
++  "dropout": 0.2036459447310158,
++
++
++  "num_steps": 2000000,
++  "gradient_accumulation_steps": 1,
++  "train_batch_size": 32,
++  "val_batch_size": 32,
++
++  "learning_rate": 0.00026402113347040717,
++  "lr_scheduler_type":"cosine",
++  "lr_scheduler_warmup_ga_steps": 2000,
++
++  "max_eval_samples_for_acc_logging": 250,
++  "max_eval_samples_for_acc_logging_test": 250,
++  "log_interval_for_eval_loss": 1000,
++  "log_interval_for_acc": 50000,
++  "chkpts_to_keep": 30,
++
++  "input_smiles_augmentation": true,
++  "input_order_augmentation": true,
++  "target_smiles_augmentation": false,
++  "target_order_augmentation": true
++}
+\ No newline at end of file
+--
+2.41.0
